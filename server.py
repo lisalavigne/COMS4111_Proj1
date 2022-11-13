@@ -88,15 +88,13 @@ def teardown_request(exception):
 
 def reset():
   session['genders']=genders
-  session['logged_in']=False
-  session['uid'] = ''
   session['signup']=dict()
   session['modifyprofile']=dict()
-  myprofile=dict()
+  session['myprofile']=dict()
 
 @app.route('/')
 def home():
-  if not session.get('logged_in'):
+  if not session.get('uid') or session['uid']=='':
     reset()
     return render_template('login.html')
   else:
@@ -110,7 +108,6 @@ def login():
   row = cursor.fetchone()
   if  row:
     reset()
-    session['logged_in'] = True
     session['uid']=row['uid']
   else:
     cursor.close()
@@ -123,10 +120,40 @@ def retry():
 	session['logged_in'] = False
 	return home()
 
+@app.route("/sendmessage", methods=['POST'])
+def sendmessage():
+  if not session.get('uid') or session['uid']=='':
+    return home()
+  get_next_cid_query="SELECT max(cid)+1 as cid FROM chat_send_receive;"
+  cursor=g.conn.execute(get_next_cid_query)
+  row = cursor.fetchone()
+  cid=row['cid']
+  send_query="INSERT INTO chat_send_receive VALUES ((%s),(%s),(%s),(%s),(%s));"
+  data=(cid, str(session['uid']),str(request.form['uid']),'now' ,request.form['content'],)
+  g.conn.execute(send_query,data)
+  return chat()
+
+@app.route("/chat", methods=['POST'])
+def chat():
+  if not session.get('uid') or session['uid']=='':
+    return home()
+  chat_query="SELECT sender,content FROM chat_send_receive WHERE (sender=(%s) and receiver=(%s)) or (sender=(%s) and receiver=(%s)) ORDER BY t;"
+  myname=g.conn.execute('SELECT name FROM users WHERE uid=(%s)',(session['uid'],)).fetchone()['name']
+  data=(session['uid'],request.form['uid'],request.form['uid'],session['uid'],)
+  raw=g.conn.execute(chat_query,data)
+  messages=[]
+  for message in raw:
+    if message['sender']==session['uid']:
+      messages.append(dict([('name',myname),('content',message['content'])]))
+    else:
+      messages.append(dict([('name',request.form['username']),('content',message['content'])]))
+  other=dict([('uid',request.form['uid']),('name',request.form['username'])])
+  return render_template('chat.html', **dict([('messages',messages),('other',other)]))
+
 @app.route("/logout", methods=['POST'])
 def logout():
-	session['logged_in'] = False
-	return home()
+  session['uid']=''
+  return home()
 
 @app.route("/signuppage", methods=['POST'])
 def signuppage():
@@ -134,48 +161,98 @@ def signuppage():
 
 @app.route("/myprofilepage", methods=['POST'])
 def myprofilepage():
-  if not session.get('logged_in'):
+  if not session.get('uid') or session['uid']=='':
     return home()
+  reset()
   login_query="SELECT * FROM users WHERE uid=(%s);"
   data=(session['uid'],)
   cursor=g.conn.execute(login_query,data)
   row = cursor.fetchone()
-  myprofile['username'] = row['name']
-  myprofile['password'] = row['passwd']
-  myprofile['uid']=row['uid']
-  myprofile['gender'] =  row['gender']
-  myprofile['self_desc']= row['self_description']
-  myprofile['city']=row['city'] 
-  myprofile['bday'] = row['birthday']
-  myprofile['pgender']=row['p_gender']
-  myprofile['pcity']=row['p_city']
-  myprofile['page'] = row['p_age']
-  myprofile['genders']=genders
-  return render_template('my_profile_page.html',**myprofile)
+  session['myprofile']['username'] = row['name']
+  session['myprofile']['password'] = row['passwd']
+  session['myprofile']['uid']=row['uid']
+  session['myprofile']['gender'] =  row['gender']
+  session['myprofile']['self_desc']= row['self_description']
+  session['myprofile']['city']=row['city'] 
+  session['myprofile']['bday'] = row['birthday']
+  session['myprofile']['pgender']=row['p_gender']
+  session['myprofile']['pcity']=row['p_city']
+  session['myprofile']['page'] = row['p_age']
+  session['myprofile']['genders']=genders
+  return render_template('my_profile_page.html',**session['myprofile'])
+
+@app.route("/getuserinformation", methods=['POST'])
+def getuserinformation():
+  if not session.get('uid') or session['uid']=='':
+    return home()
+  reset()
+  login_query="SELECT * FROM users WHERE uid=(%s);"
+  data=(request.form['uid'],)
+  cursor=g.conn.execute(login_query,data)
+  row = cursor.fetchone()
+  user=dict()
+  user['username'] = row['name']
+  user['password'] = row['passwd']
+  user['uid']=row['uid']
+  user['gender'] =  row['gender']
+  user['self_desc']= row['self_description']
+  user['city']=row['city'] 
+  user['bday'] = row['birthday']
+  user['pgender']=row['p_gender']
+  user['pcity']=row['p_city']
+  user['page'] = row['p_age']
+  user['genders']=genders
+  return render_template('user_profile_page.html',**user)
+
+@app.route("/userspage", methods=['POST'])
+def userspage():
+  if not session.get('uid') or session['uid']=='':
+    return home()
+  get_users_count_query="SELECT COUNT (*) AS count FROM users WHERE NOT uid=(%s);"
+  get_users_query="SELECT uid,name FROM users WHERE NOT uid=(%s) LIMIT 7"
+  data=(session['uid'],)
+  users=g.conn.execute(get_users_query,data).fetchall()
+  count=int(g.conn.execute(get_users_count_query,data).fetchone()['count'])//7
+  data=dict([('users',users),('count',list(range(0,count+1)))])
+  return render_template('users.html', **data)
+
+@app.route("/redirectuserspage", methods=['POST'])
+def redirectuserspage():
+  if not session.get('uid') or session['uid']=='':
+    return home()
+  get_users_count_query="SELECT COUNT (*) AS count FROM users WHERE NOT uid=(%s) ;"
+  get_users_query="SELECT uid,name FROM users WHERE NOT uid=(%s) LIMIT 7 OFFSET (%s)"
+  data=(session['uid'],int(request.form['page_num'])*7,)
+  users=g.conn.execute(get_users_query,data).fetchall()
+  count=int(g.conn.execute(get_users_count_query,(session['uid'],)).fetchone()['count'])//7
+  data=dict([('users',users),('count',list(range(0,count+1)))])
+  return render_template('users.html', **data)
+
+
 
 @app.route("/modifymyprofilepage", methods=['POST'])
 def modifymyprofilepage():
-  if not session.get('logged_in'):
+  if not session.get('uid') or session['uid']=='':
     return home()
   return render_template('modify_myprofile.html')
 
 
 @app.route("/modifymyprofile", methods=['POST'])
 def modifymyprofile():
-  if not session.get('logged_in'):
+  if not session.get('uid') or session['uid']=='':
     return home()
   if (len(request.form['password'])>0 and len(request.form['password'])<6):
     session['modifyprofile']['short_password'] = True
     return modifymyprofilepage()
   
-  username=myprofile['username']
+  username=session['myprofile']['username']
   if not len(request.form['username'])==0:
     username=request.form['username']
   
-  password=myprofile['password']
+  password=session['myprofile']['password']
   if not len(request.form['password'])==0:
     password=request.form['password']
-  if not myprofile['username']==username or not myprofile['password']==password:
+  if not session['myprofile']['username']==username or not session['myprofile']['password']==password:
     check_query="SELECT * FROM users WHERE name=(%s) AND passwd=(%s);"
     data=(username, password,)
     cursor=g.conn.execute(check_query,data)
@@ -183,32 +260,32 @@ def modifymyprofile():
     if  row:
       session['modifyprofile']['dup_name_password'] = True
       return render_template('modify_myprofile.html')
-  myprofile['username']=username
-  myprofile['password']=password
+  session['myprofile']['username']=username
+  session['myprofile']['password']=password
 
   if not request.form['gender']=='-1':
-    myprofile['gender']=int(request.form['gender'])
+    session['myprofile']['gender']=int(request.form['gender'])
 
   if not len(request.form['self_desc'])==0:
-    myprofile['self_desc']=request.form['self_desc']
+    session['myprofile']['self_desc']=request.form['self_desc']
 
   if not len(request.form['city'])==0:
-    myprofile['city']=request.form['city']
+    session['myprofile']['city']=request.form['city']
 
   if not len(request.form['bday'])==0:
-    myprofile['bday']=request.form['bday']
+    session['myprofile']['bday']=request.form['bday']
 
   if not request.form['pgender']=='-1':
-    myprofile['pgender']=int(request.form['pgender'])
+    session['myprofile']['pgender']=int(request.form['pgender'])
 
   if not len(request.form['pcity'])==0:
-    myprofile['pcity']=request.form['pcity']
+    session['myprofile']['pcity']=request.form['pcity']
 
   if not len(request.form['page'])==0:
-    myprofile['page']=int(request.form['page'])
-    
+    session['myprofile']['page']=int(request.form['page'])
+
   signup_query="UPDATE users SET passwd=(%s), gender=(%s), name=(%s),self_description=(%s), city=(%s), birthday=(%s), p_gender=(%s),p_city=(%s),p_age=(%s) WHERE uid=(%s);"
-  data= (myprofile['password'], myprofile['gender'], myprofile['username'], myprofile['self_desc'],myprofile['city'], myprofile['bday'],myprofile['pgender'], myprofile['pcity'],myprofile['page'],session['uid'],)
+  data= (session['myprofile']['password'], session['myprofile']['gender'], session['myprofile']['username'], session['myprofile']['self_desc'],session['myprofile']['city'], session['myprofile']['bday'],session['myprofile']['pgender'], session['myprofile']['pcity'],session['myprofile']['page'],session['uid'],)
   g.conn.execute(signup_query,data)
   return render_template('success.html') 
 
