@@ -1,0 +1,30 @@
+<html lang="en">
+<body>
+<header>
+  <h1>Chat with {{other['name']}}</h1>
+</header>
+<div style="height:600px;width:500px;overflow:auto;border:1px solid ;padding:2%">
+    {% for message in messages%}
+    <p>{{message['name']}}: {{message['content']}} </p>
+    {% endfor %}
+</div>
+<form action="/sendmessage" method="post">
+  <p>
+    <input type="hidden" name='uid' value={{other['uid']}}>
+    <input type="hidden" name='username' value={{other['name']}}>
+    <input style="width:500px;overflow:auto" type="text" name="content">
+    <input type="submit" value="Send">
+  </p>
+</form>
+<form action="/chat" method="post">
+  <p>
+    <input type="hidden" name='uid' value={{other['uid']}}>
+    <input type="hidden" name='username' value={{other['name']}}>
+    <input type="submit" value="Refresh">
+  </p>
+</form>
+<form action="/success" method="post">
+  <input type="submit" value="home">
+</form>
+</body>
+</html>

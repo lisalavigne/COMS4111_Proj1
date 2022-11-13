@@ -1,5 +1,5 @@
 <html>
-<header><h1>My Profile Page</h1></header>
+<header><h1>Users Profile Page</h1></header>
 
 <p> Username: {{username}} </p>
 <p> Gender: {{genders[gender-1]}}</p>
@@ -9,11 +9,15 @@
 <p> Gender Preference: {{genders[pgender-1]}}</p>
 <p> City Preference: {{pcity}}</p>
 <p> Age Preference: {{page}}</p>
-<form action="/modifymyprofilepage" method="post">
-    <input type="submit" value="Modify My Profile">
+<form action="/chat" method="post">
+    <p>
+        <input type="hidden" name='uid' value={{uid}}>
+        <input type="hidden" name='username' value={{username}}>
+        <input type="submit" value="Chat">
+    </p>
 </form>
 <form action="/success" method="post">
-    <input type="submit" value="home">
+        <input type="submit" value="home">
 </form>
 
 </html>
