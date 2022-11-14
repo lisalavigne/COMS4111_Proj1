@@ -228,7 +228,96 @@ def redirectuserspage():
   data=dict([('users',users),('count',list(range(0,count+1)))])
   return render_template('users.html', **data)
 
+@app.route("/posts", methods=['POST'])
+def posts():
+  if not session.get('uid') or session['uid']=='':
+    return home()
+  get_posts_count_query="SELECT COUNT (*) AS count FROM post_posted;"
+  get_posts_query="SELECT P.uid,P.pid, P.content,U.name, P.nlikes FROM post_posted AS P,users AS U WHERE P.uid=U.uid ORDER BY t DESC LIMIT 7 OFFSET (%s)"
+  offset=0
+  try:
+    offset=int(request.form['page_num'])
+  except:
+    pass
+  posts=g.conn.execute(get_posts_query,offset*7).fetchall()
+  count=int(g.conn.execute(get_posts_count_query).fetchone()['count'])//7
+  data=dict([('posts',posts),('count',list(range(0,count+1))),('page_num',offset)])
+  return render_template('posts.html', **data)
 
+@app.route("/comments", methods=['POST'])
+def comments():
+  if not session.get('uid') or session['uid']=='':
+    return home()
+  get_comments_count_query="SELECT COUNT (*) AS count FROM comment_post_belong WHERE pid=(%s);"
+  get_comments_query="SELECT C.cid, C.uid, C.content, U.name, C.nlikes FROM comment_post_belong AS C,users AS U WHERE C.pid=(%s) AND U.uid=C.uid ORDER BY t LIMIT 7 OFFSET (%s)"
+  offset=0
+  try:
+    offset=int(request.form['page_num'])
+  except:
+    pass
+  comments=g.conn.execute(get_comments_query,(request.form['pid'], offset*7)).fetchall()
+  count=int(g.conn.execute(get_comments_count_query,request.form['pid']).fetchone()['count'])//7
+  post=g.conn.execute('SELECT * FROM post_posted,users WHERE post_posted.pid=(%s) AND post_posted.uid=users.uid',request.form['pid']).fetchone()
+  data=dict([('comments',comments),('count',list(range(0,count+1))),('page_num',offset),('post',post)])
+  return render_template('comments.html', **data)
+
+@app.route("/likecomment", methods=['POST'])
+def likecomment():
+  if not session.get('uid') or session['uid']=='':
+    return home()
+  get_comment_like_query="SELECT nlikes FROM comment_post_belong WHERE cid=(%s);"
+  nlikes=int(g.conn.execute(get_comment_like_query, (request.form['cid'],)).fetchone()['nlikes'])+1
+  increment_comment_like_query="UPDATE comment_post_belong SET nlikes=(%s) WHERE cid=(%s)"
+  g.conn.execute(increment_comment_like_query,(nlikes,request.form['cid'],))
+  return comments()
+
+@app.route("/deletecomment", methods=['POST'])
+def deletecomment():
+  if not session.get('uid') or session['uid']=='':
+    return home()
+  delete_query="DELETE FROM comment_post_belong WHERE cid=(%s)"
+  g.conn.execute(delete_query, (request.form['cid'],))
+  return comments()
+
+@app.route("/addcomment", methods=['POST'])
+def addcomment():
+  if not session.get('uid') or session['uid']=='':
+    return home()
+  get_next_cid_query="SELECT max(cid)+1 as cid FROM comment_post_belong;"
+  cid=g.conn.execute(get_next_cid_query).fetchone()['cid']
+  send_query="INSERT INTO comment_post_belong VALUES ((%s),(%s),(%s),(%s),(%s),(%s));"
+  data=(cid, session['uid'],request.form['pid'],'now' ,request.form['content'],0,)
+  g.conn.execute(send_query,data)
+  return comments()
+
+@app.route("/likepost", methods=['POST'])
+def likepost():
+  if not session.get('uid') or session['uid']=='':
+    return home()
+  get_post_like_query="SELECT nlikes FROM post_posted WHERE pid=(%s);"
+  nlikes=int(g.conn.execute(get_post_like_query, (request.form['pid'],)).fetchone()['nlikes'])+1
+  increment_post_like_query="UPDATE post_posted SET nlikes=(%s) WHERE pid=(%s)"
+  g.conn.execute(increment_post_like_query,(nlikes,request.form['pid'],))
+  return posts()
+
+@app.route("/deletepost", methods=['POST'])
+def deletepost():
+  if not session.get('uid') or session['uid']=='':
+    return home()
+  delete_query="DELETE FROM post_posted WHERE pid=(%s)"
+  g.conn.execute(delete_query, (request.form['pid'],))
+  return posts()
+
+@app.route("/addpost", methods=['POST'])
+def addpost():
+  if not session.get('uid') or session['uid']=='':
+    return home()
+  get_next_pid_query="SELECT max(pid)+1 as pid FROM post_posted;"
+  pid=g.conn.execute(get_next_pid_query).fetchone()['pid']
+  send_query="INSERT INTO post_posted VALUES ((%s),(%s),(%s),(%s),(%s));"
+  data=(pid, session['uid'],'now' ,request.form['content'],0,)
+  g.conn.execute(send_query,data)
+  return posts()
 
 @app.route("/modifymyprofilepage", methods=['POST'])
 def modifymyprofilepage():

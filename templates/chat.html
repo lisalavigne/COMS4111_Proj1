@@ -16,15 +16,22 @@
     <input type="submit" value="Send">
   </p>
 </form>
+<div style="float:left;">
 <form action="/chat" method="post">
-  <p>
     <input type="hidden" name='uid' value={{other['uid']}}>
     <input type="hidden" name='username' value={{other['name']}}>
     <input type="submit" value="Refresh">
-  </p>
 </form>
+</div>
+<div style="float:left;">
 <form action="/success" method="post">
   <input type="submit" value="home">
 </form>
+</div>
+<div style="float:left;">
+<form action="/userspage" method="post">
+  <input type="submit" value="Users">
+</form>
+</div>
 </body>
 </html>
